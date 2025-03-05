@@ -40,6 +40,9 @@ android {
     buildFeatures {
         compose = true
     }
+    room {
+        schemaDirectory("$projectDir/schemas")
+    }
 }
 
 dependencies {
@@ -56,9 +59,14 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
 
     implementation(libs.hilt.android)
+    ksp(libs.hilt.android.compiler)
     ksp(libs.hilt.compiler)
     implementation(libs.androidx.hilt.navigation.compose)
+    implementation(libs.androidx.hilt.work)
+    implementation(libs.androidx.work.runtime.ktx)
 
+    ksp(libs.room.compiler)
+    implementation(libs.room.ktx)
     implementation(libs.room.runtime)
     implementation(libs.sqlite.bundled)
     implementation(libs.room.runtime.android)
@@ -66,8 +74,4 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
 
     debugImplementation(libs.androidx.ui.tooling)
-}
-
-room {
-    schemaDirectory("$projectDir/schemas")
 }
