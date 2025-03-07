@@ -2,6 +2,7 @@ package com.debanshu.dumbone.ui.screen
 
 
 import android.content.Intent
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,10 +14,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Message
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Call
-import androidx.compose.material.icons.outlined.Message
 import androidx.compose.material.icons.outlined.QueryStats
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -24,52 +26,34 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.debanshu.dumbone.ui.theme.DumbOneTheme
+import androidx.hilt.navigation.compose.hiltViewModel
+import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(
-    viewModel: HomeViewModel,
-    onNavigateToAppList: () -> Unit,
-    onNavigateToStats: () -> Unit
+    pagerState: PagerState,
+    viewModel: HomeViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
     val currentTime by viewModel.currentTime.collectAsState()
     val essentialApps by viewModel.essentialApps.collectAsState()
     val colors = MaterialTheme.colorScheme
+    val coroutineScope = rememberCoroutineScope()
 
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = colors.background
     ) {
+        // Home page
         Box(modifier = Modifier.fillMaxSize()) {
-            // Swipe indicators
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "< Stats",
-                    fontSize = 14.sp,
-                    color = colors.secondary,
-                    modifier = Modifier.padding(8.dp)
-                )
-
-                Text(
-                    text = "Apps >",
-                    fontSize = 14.sp,
-                    color = colors.secondary,
-                    modifier = Modifier.padding(8.dp)
-                )
-            }
-
             // Main content
             Column(
                 modifier = Modifier
@@ -111,7 +95,7 @@ fun HomeScreen(
 
                     // Messages app shortcut
                     MinimalIconButton(
-                        icon = Icons.Outlined.Message,
+                        icon = Icons.AutoMirrored.Outlined.Message,
                         contentDescription = "Messages",
                         onClick = {
                             val intent = Intent(Intent.ACTION_MAIN)
@@ -135,7 +119,11 @@ fun HomeScreen(
                     MinimalIconButton(
                         icon = Icons.Outlined.Apps,
                         contentDescription = "Apps",
-                        onClick = onNavigateToAppList
+                        onClick = {
+                            coroutineScope.launch {
+                                pagerState.animateScrollToPage(2)
+                            }
+                        }
                     )
 
                     Spacer(modifier = Modifier.width(24.dp))
@@ -144,7 +132,11 @@ fun HomeScreen(
                     MinimalIconButton(
                         icon = Icons.Outlined.QueryStats,
                         contentDescription = "Stats",
-                        onClick = onNavigateToStats
+                        onClick = {
+                            coroutineScope.launch {
+                                pagerState.animateScrollToPage(0)
+                            }
+                        }
                     )
                 }
 
@@ -157,6 +149,36 @@ fun HomeScreen(
                     color = colors.secondary,
                     textAlign = TextAlign.Center
                 )
+
+                // Swipe hints at the bottom
+                Spacer(modifier = Modifier.height(48.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "← Stats",
+                        fontSize = 14.sp,
+                        color = colors.secondary,
+                        modifier = Modifier.padding(horizontal = 12.dp)
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .width(8.dp)
+                            .height(8.dp)
+                            .background(colors.primary)
+                    )
+
+                    Text(
+                        text = "Apps →",
+                        fontSize = 14.sp,
+                        color = colors.secondary,
+                        modifier = Modifier.padding(horizontal = 12.dp)
+                    )
+                }
             }
         }
     }
