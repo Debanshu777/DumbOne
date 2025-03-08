@@ -23,31 +23,21 @@ class HomeViewModel @Inject constructor(
     private val _essentialApps = MutableStateFlow<List<AppInfo>>(emptyList())
     val essentialApps: StateFlow<List<AppInfo>> = _essentialApps.asStateFlow()
 
-    private val _currentTime = MutableStateFlow(System.currentTimeMillis())
-    val currentTime: StateFlow<Long> = _currentTime.asStateFlow()
-
     private val _isOnboardingCompleted = MutableStateFlow(false)
     val isOnboardingCompleted: StateFlow<Boolean> = _isOnboardingCompleted.asStateFlow()
 
     init {
         loadData()
-        // Update the time every minute
-        viewModelScope.launch {
-            while (true) {
-                _currentTime.value = System.currentTimeMillis()
-                delay(60000) // 1 minute
-            }
-        }
     }
 
     private fun loadData() {
         viewModelScope.launch {
             // Check if onboarding is completed
             val userPrefs = preferencesRepository.userPreferences.first()
-            _isOnboardingCompleted.value = userPrefs.onboardingCompleted
+            _isOnboardingCompleted.tryEmit(userPrefs.onboardingCompleted)
 
             // Load essential apps
-            _essentialApps.value = appRepository.getEssentialApps()
+            _essentialApps.tryEmit(appRepository.getEssentialApps())
         }
     }
 

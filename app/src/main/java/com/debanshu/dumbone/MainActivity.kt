@@ -14,6 +14,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.debanshu.dumbone.ui.screen.appListScreen.AppListScreen
 import com.debanshu.dumbone.ui.screen.homeScreen.HomeScreen
 import com.debanshu.dumbone.ui.screen.homeScreen.HomeViewModel
 import com.debanshu.dumbone.ui.screen.onboardingScreen.OnboardingScreen
@@ -33,25 +34,27 @@ class MainActivity : ComponentActivity() {
                 val isOnboardingCompleted by homeViewModel.isOnboardingCompleted.collectAsState()
 
                 if (!isOnboardingCompleted) {
-                    // Show onboarding if not completed
                     val onboardingViewModel = hiltViewModel<OnboardingViewModel>()
-                    OnboardingScreen(
-                        viewModel = onboardingViewModel,
-                        onComplete = { /* Onboarding completed */ }
-                    )
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.background
+                    ) {
+                        OnboardingScreen(
+                            viewModel = onboardingViewModel,
+                            onComplete = { }
+                        )
+                    }
                 } else {
-                    // Main launcher with pager
                     Surface(
                         modifier = Modifier.fillMaxSize(),
                         color = MaterialTheme.colorScheme.background
                     ) {
                         val pagerState = rememberPagerState(initialPage = 1) { 3 }
-
                         HorizontalPager(
                             state = pagerState,
                             modifier = Modifier.fillMaxSize(),
-                            userScrollEnabled = true, // Enable user scrolling
-                            pageSpacing = 0.dp // No spacing between pages for seamless swiping
+                            userScrollEnabled = true,
+                            pageSpacing = 0.dp
                         ) { page ->
                             when (page) {
                                 0 -> StatsScreen()

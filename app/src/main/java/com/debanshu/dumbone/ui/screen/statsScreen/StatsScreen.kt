@@ -42,10 +42,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.debanshu.dumbone.ui.common.formatDuration
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 import kotlin.math.min
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -161,7 +161,7 @@ fun StatsScreen(
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
                                     Text(
-                                        text = formatDuration(totalUsageTime),
+                                        text = totalUsageTime.formatDuration(),
                                         fontSize = 22.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White
@@ -311,7 +311,7 @@ fun StatsScreen(
                                 Spacer(modifier = Modifier.height(8.dp))
 
                                 Text(
-                                    text = "Total time: ${formatDuration(stat.totalUsageDuration)}",
+                                    text = "Total time: ${stat.totalUsageDuration.formatDuration()}",
                                     fontSize = 14.sp,
                                     color = Color.White.copy(alpha = 0.7f),
                                     modifier = Modifier.align(Alignment.End)
@@ -327,81 +327,5 @@ fun StatsScreen(
                 }
             }
         }
-    }
-}
-
-// Helper function to render a simple bar chart for usage patterns
-@Composable
-fun UsageBarChart(
-    usageData: List<Pair<String, Int>>,
-    modifier: Modifier = Modifier
-) {
-    val maxValue = usageData.maxOfOrNull { it.second } ?: 1
-    val primaryColor = MaterialTheme.colorScheme.primary
-
-    Card(
-        modifier = modifier,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.1f)
-        ),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            Text(
-                text = "Usage Patterns",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Medium,
-                color = Color.White,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
-
-            Canvas(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(150.dp)
-            ) {
-                val barWidth = size.width / usageData.size
-
-                usageData.forEachIndexed { index, (label, value) ->
-                    val barHeight = (value / maxValue.toFloat()) * size.height
-
-                    // Draw the bar - using a non-Composable method that works in Canvas
-                    drawRect(
-                        color = primaryColor,
-                        topLeft = Offset(index * barWidth, size.height - barHeight),
-                        size = Size(barWidth * 0.8f, barHeight)
-                    )
-                }
-            }
-
-            // Labels
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                usageData.forEach { (label, _) ->
-                    Text(
-                        text = label,
-                        fontSize = 12.sp,
-                        color = Color.White.copy(alpha = 0.7f),
-                        textAlign = TextAlign.Center
-                    )
-                }
-            }
-        }
-    }
-}
-
-private fun formatDuration(millis: Long): String {
-    val hours = TimeUnit.MILLISECONDS.toHours(millis)
-    val minutes = TimeUnit.MILLISECONDS.toMinutes(millis) % 60
-
-    return when {
-        hours > 0 -> "$hours h $minutes min"
-        else -> "$minutes min"
     }
 }
