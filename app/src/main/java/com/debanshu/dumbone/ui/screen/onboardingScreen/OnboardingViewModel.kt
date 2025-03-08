@@ -1,4 +1,4 @@
-package com.debanshu.dumbone.ui.screen
+package com.debanshu.dumbone.ui.screen.onboardingScreen
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope

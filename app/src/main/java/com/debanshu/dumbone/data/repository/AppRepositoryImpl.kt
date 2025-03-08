@@ -19,10 +19,6 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
-import javax.inject.Singleton
-
-// Extension property for DataStore
-val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "min_launcher_preferences")
 
 class AppRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,

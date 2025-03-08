@@ -14,12 +14,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.debanshu.dumbone.ui.screen.AppListScreen
-import com.debanshu.dumbone.ui.screen.HomeScreen
-import com.debanshu.dumbone.ui.screen.HomeViewModel
-import com.debanshu.dumbone.ui.screen.OnboardingScreen
-import com.debanshu.dumbone.ui.screen.OnboardingViewModel
-import com.debanshu.dumbone.ui.screen.StatsScreen
+import com.debanshu.dumbone.ui.screen.homeScreen.HomeScreen
+import com.debanshu.dumbone.ui.screen.homeScreen.HomeViewModel
+import com.debanshu.dumbone.ui.screen.onboardingScreen.OnboardingScreen
+import com.debanshu.dumbone.ui.screen.onboardingScreen.OnboardingViewModel
+import com.debanshu.dumbone.ui.screen.statsScreen.StatsScreen
 import com.debanshu.dumbone.ui.theme.DumbOneTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -55,15 +54,9 @@ class MainActivity : ComponentActivity() {
                             pageSpacing = 0.dp // No spacing between pages for seamless swiping
                         ) { page ->
                             when (page) {
-                                0 -> StatsScreen(
-                                    onNavigateBack = { /* Not used in pager */ },
-                                    pagerState = pagerState
-                                )
-                                1 -> HomeScreen(pagerState = pagerState)
-                                2 -> AppListScreen(
-                                    onNavigateBack = { /* Not used in pager */ },
-                                    pagerState = pagerState
-                                )
+                                0 -> StatsScreen()
+                                1 -> HomeScreen()
+                                2 -> AppListScreen()
                             }
                         }
                     }

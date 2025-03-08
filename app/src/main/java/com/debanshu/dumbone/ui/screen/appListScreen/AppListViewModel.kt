@@ -1,11 +1,11 @@
-package com.debanshu.dumbone.ui.screen
+package com.debanshu.dumbone.ui.screen.appListScreen
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.debanshu.dumbone.data.model.AppInfo
 import com.debanshu.dumbone.data.repository.AppRepository
-import com.debanshu.dumbone.data.repository.PreferencesRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,7 +15,6 @@ import javax.inject.Inject
 @HiltViewModel
 class AppListViewModel @Inject constructor(
     private val appRepository: AppRepository,
-    private val preferencesRepository: PreferencesRepository
 ) : ViewModel() {
 
     private val _essentialApps = MutableStateFlow<List<AppInfo>>(emptyList())
@@ -33,7 +32,7 @@ class AppListViewModel @Inject constructor(
         viewModelScope.launch {
             while (true) {
                 updateCooldowns()
-                kotlinx.coroutines.delay(1000) // Update every second
+                delay(1000) // Update every second
             }
         }
     }

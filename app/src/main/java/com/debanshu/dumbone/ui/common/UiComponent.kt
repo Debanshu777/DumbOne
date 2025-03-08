@@ -1,4 +1,4 @@
-package com.debanshu.dumbone.ui.screen
+package com.debanshu.dumbone.ui.common
 
 
 import androidx.compose.foundation.background
@@ -22,7 +22,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -111,7 +110,7 @@ fun AppItem(
         if (isInCooldown && cooldownTimeRemaining > 0) {
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Available in: ${formatTime(cooldownTimeRemaining)}",
+                text = "Available in: ${formatTimeUiComponent(cooldownTimeRemaining)}",
                 fontSize = 12.sp,
                 color = colors.secondary
             )
@@ -205,7 +204,7 @@ fun UsageStatItem(
             )
 
             Text(
-                text = "Total: ${formatTime(usageDuration)}",
+                text = "Total: ${formatTimeUiComponent(usageDuration)}",
                 fontSize = 14.sp,
                 color = colors.secondary
             )
@@ -231,7 +230,7 @@ fun CooldownTimer(
         Spacer(modifier = Modifier.height(4.dp))
 
         Text(
-            text = formatTime(timeRemaining),
+            text = formatTimeUiComponent(timeRemaining),
             fontSize = 24.sp,
             fontWeight = FontWeight.Medium,
             color =  MaterialTheme.colorScheme.onBackground
@@ -240,7 +239,7 @@ fun CooldownTimer(
 }
 
 // Helper function to format time
-fun formatTime(millis: Long): String {
+fun formatTimeUiComponent(millis: Long): String {
     val hours = TimeUnit.MILLISECONDS.toHours(millis)
     val minutes = TimeUnit.MILLISECONDS.toMinutes(millis) % 60
     val seconds = TimeUnit.MILLISECONDS.toSeconds(millis) % 60
