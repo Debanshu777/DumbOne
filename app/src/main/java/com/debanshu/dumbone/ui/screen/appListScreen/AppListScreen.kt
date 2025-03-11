@@ -2,11 +2,14 @@ package com.debanshu.dumbone.ui.screen.appListScreen
 
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.clipScrollableContainer
+import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,23 +20,26 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -50,12 +56,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.debanshu.dumbone.ui.screen.appListScreen.AppListViewModel
+import com.debanshu.dumbone.ui.common.noRippleClickable
+import com.debanshu.dumbone.ui.common.onTriggerApp
 import java.util.concurrent.TimeUnit
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
@@ -82,49 +90,61 @@ fun AppListScreen(
                 (activeCategory == "all" || activeCategory == "limited")
     }
 
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = Color.Transparent
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .systemBarsPadding()
+            .clipScrollableContainer(Orientation.Vertical)
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize()
-        ) {
-            // Search field
+        // Search field
+        stickyHeader {
             TextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
                 placeholder = {
                     Text(
                         "Search apps...",
-                        color = Color.White.copy(alpha = 0.5f)
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 },
+                singleLine = true,
                 leadingIcon = {
                     Icon(
                         Icons.Outlined.Search,
                         contentDescription = "Search",
-                        tint = Color.White.copy(alpha = 0.7f)
                     )
                 },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { searchQuery = "" }) {
+                            Icon(Icons.Filled.Clear, contentDescription = "Clear Text")
+                        }
+                    }
+                },
+                keyboardOptions = KeyboardOptions(
+                    imeAction = ImeAction.Search
+                ),
                 colors = TextFieldDefaults.colors(
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.1f),
-                    focusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.2f),
-                    unfocusedTextColor = Color.White,
-                    focusedTextColor = Color.White,
-                    cursorColor = Color.White,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent
                 ),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(30.dp),
                 modifier = Modifier
                     .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.background)
+                    .padding(vertical = 4.dp),
             )
+        }
 
-            // Category tabs
+        item {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 12.dp),
+                    .background(MaterialTheme.colorScheme.background)
+                    .padding(vertical = 4.dp),
                 horizontalArrangement = Arrangement.Center
             ) {
                 CategoryTab(
@@ -152,241 +172,200 @@ fun AppListScreen(
                     modifier = Modifier.weight(1f)
                 )
             }
+        }
 
-            HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
-
-            // App lists
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                // Active cooldowns section at the top for better visibility
-                if (appCooldowns.isNotEmpty() && (activeCategory == "all" || activeCategory == "limited")) {
-                    item {
-                        AnimatedVisibility(
-                            visible = true,
-                            enter = fadeIn(),
-                            exit = fadeOut()
-                        ) {
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surface.copy(
-                                        alpha = 0.1f
-                                    )
-                                ),
-                                shape = RoundedCornerShape(16.dp)
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            Icons.Outlined.AccessTime,
-                                            contentDescription = null,
-                                            tint = Color.White.copy(alpha = 0.7f),
-                                            modifier = Modifier.size(18.dp)
-                                        )
-
-                                        Spacer(modifier = Modifier.size(8.dp))
-
-                                        Text(
-                                            text = "Active Cooldowns",
-                                            fontSize = 18.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            color = Color.White
-                                        )
-                                    }
-
-                                    Spacer(modifier = Modifier.height(16.dp))
-
-                                    appCooldowns.entries.sortedBy { it.value }
-                                        .forEach { (packageName, timeRemaining) ->
-                                            val appName =
-                                                limitedApps.find { it.packageName == packageName }?.appName
-                                                    ?: packageName
-                                            val maxCooldownTime =
-                                                8 * 60 * 1000L // Example max cooldown of 8 minutes
-                                            val progress =
-                                                1f - (timeRemaining.toFloat() / maxCooldownTime.toFloat()).coerceIn(
-                                                    0f,
-                                                    1f
-                                                )
-
-                                            Card(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(vertical = 8.dp),
-                                                colors = CardDefaults.cardColors(
-                                                    containerColor = MaterialTheme.colorScheme.surface.copy(
-                                                        alpha = 0.15f
-                                                    )
-                                                ),
-                                                shape = RoundedCornerShape(12.dp)
-                                            ) {
-                                                Column(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .padding(12.dp),
-                                                    horizontalAlignment = Alignment.CenterHorizontally
-                                                ) {
-                                                    Text(
-                                                        text = appName,
-                                                        fontSize = 16.sp,
-                                                        color = Color.White,
-                                                        fontWeight = FontWeight.Medium
-                                                    )
-
-                                                    Spacer(modifier = Modifier.height(8.dp))
-
-                                                    // Visual countdown with CircularProgressIndicator
-                                                    Box(
-                                                        modifier = Modifier.size(64.dp),
-                                                        contentAlignment = Alignment.Center
-                                                    ) {
-                                                        // Background track
-                                                        CircularProgressIndicator(
-                                                            progress = 1f,
-                                                            modifier = Modifier.fillMaxSize(),
-                                                            color = Color.White.copy(alpha = 0.1f),
-                                                            strokeWidth = 4.dp
-                                                        )
-
-                                                        // Actual progress
-                                                        CircularProgressIndicator(
-                                                            progress = { progress },
-                                                            modifier = Modifier.fillMaxSize(),
-                                                            color = MaterialTheme.colorScheme.primary,
-                                                            strokeWidth = 4.dp,
-                                                            strokeCap = StrokeCap.Round
-                                                        )
-
-                                                        // Time remaining in the center
-                                                        Text(
-                                                            text = formatTime(timeRemaining),
-                                                            color = Color.White,
-                                                            fontSize = 14.sp,
-                                                            fontWeight = FontWeight.Medium
-                                                        )
-
-                                                    }
-                                                }
-                                            }
-                                        }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Essential apps section
-                if (filteredEssentialApps.isNotEmpty()) {
-                    item {
-                        if (activeCategory != "essential") {
-                            Text(
-                                text = "Essential Apps",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color.White.copy(alpha = 0.8f),
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+        if (appCooldowns.isNotEmpty() && (activeCategory == "all" || activeCategory == "limited")) {
+            item {
+                AnimatedVisibility(
+                    visible = true,
+                    enter = fadeIn(),
+                    exit = fadeOut()
+                ) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface.copy(
+                                alpha = 0.1f
                             )
-
-                            Divider(color = Color.White.copy(alpha = 0.1f))
-                        }
-                    }
-
-                    items(filteredEssentialApps) { app ->
-                        AppItemCard(
-                            name = app.appName,
-                            onClick = {
-                                try {
-                                    val launchIntent =
-                                        context.packageManager.getLaunchIntentForPackage(app.packageName)
-                                    if (launchIntent != null) {
-                                        viewModel.launchApp(app.packageName)
-                                        context.startActivity(launchIntent)
-                                    }
-                                } catch (e: Exception) {
-                                    // Handle exception
-                                }
-                            },
-                            isEssential = true
-                        )
-                    }
-                }
-
-                // Limited apps section
-                if (filteredLimitedApps.isNotEmpty()) {
-                    item {
-                        if (activeCategory != "limited") {
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            Text(
-                                text = "Limited Access Apps",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color.White.copy(alpha = 0.8f),
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                            )
-
-                            Divider(color = Color.White.copy(alpha = 0.1f))
-                        }
-                    }
-
-                    items(filteredLimitedApps) { app ->
-                        val isInCooldown = viewModel.isAppInCooldown(app.packageName)
-                        val cooldownTime = viewModel.getCooldownTimeRemaining(app.packageName)
-
-                        AppItemCard(
-                            name = app.appName,
-                            onClick = {
-                                try {
-                                    val launchIntent =
-                                        context.packageManager.getLaunchIntentForPackage(app.packageName)
-                                    if (launchIntent != null && !isInCooldown) {
-                                        viewModel.launchApp(app.packageName)
-                                        context.startActivity(launchIntent)
-                                    }
-                                } catch (e: Exception) {
-                                    // Handle exception
-                                }
-                            },
-                            isEssential = false,
-                            isInCooldown = isInCooldown,
-                            cooldownTimeRemaining = cooldownTime
-                        )
-                    }
-                }
-
-                // Empty state if no apps match the filter
-                if (filteredEssentialApps.isEmpty() && filteredLimitedApps.isEmpty()) {
-                    item {
-                        Box(
+                        ),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(32.dp),
-                            contentAlignment = Alignment.Center
+                                .padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Text(
-                                text = "No apps found matching \"$searchQuery\"",
-                                color = Color.White.copy(alpha = 0.7f),
-                                fontSize = 16.sp,
-                                textAlign = TextAlign.Center
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Outlined.AccessTime,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+
+                                Spacer(modifier = Modifier.size(8.dp))
+
+                                Text(
+                                    text = "Active Cooldowns",
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Medium,
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            appCooldowns.entries.sortedBy { it.value }
+                                .forEach { (packageName, timeRemaining) ->
+                                    val appName =
+                                        limitedApps.find { it.packageName == packageName }?.appName
+                                            ?: packageName
+                                    val maxCooldownTime =
+                                        8 * 60 * 1000L // Example max cooldown of 8 minutes
+                                    val progress =
+                                        1f - (timeRemaining.toFloat() / maxCooldownTime.toFloat()).coerceIn(
+                                            0f,
+                                            1f
+                                        )
+
+                                    Card(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 8.dp),
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = MaterialTheme.colorScheme.surface.copy(
+                                                alpha = 0.15f
+                                            )
+                                        ),
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(12.dp),
+                                            horizontalAlignment = Alignment.CenterHorizontally
+                                        ) {
+                                            Text(
+                                                text = appName,
+                                                fontSize = 16.sp,
+                                                fontWeight = FontWeight.Medium
+                                            )
+
+                                            Spacer(modifier = Modifier.height(8.dp))
+
+                                            // Visual countdown with CircularProgressIndicator
+                                            Box(
+                                                modifier = Modifier.size(64.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                // Background track
+                                                CircularProgressIndicator(
+                                                    progress = 1f,
+                                                    modifier = Modifier.fillMaxSize(),
+                                                    strokeWidth = 4.dp
+                                                )
+
+                                                // Actual progress
+                                                CircularProgressIndicator(
+                                                    progress = { progress },
+                                                    modifier = Modifier.fillMaxSize(),
+                                                    strokeWidth = 4.dp,
+                                                    strokeCap = StrokeCap.Round
+                                                )
+
+                                                // Time remaining in the center
+                                                Text(
+                                                    text = formatTime(timeRemaining),
+                                                    fontSize = 14.sp,
+                                                    fontWeight = FontWeight.Medium
+                                                )
+
+                                            }
+                                        }
+                                    }
+                                }
                         }
                     }
                 }
+            }
+        }
 
-                // Bottom padding
-                item {
+        // Essential apps section
+        if (filteredEssentialApps.isNotEmpty()) {
+            item {
+                if (activeCategory != "essential") {
+                    Text(
+                        text = "Essential Apps",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+
+                    HorizontalDivider()
+                }
+            }
+
+            items(filteredEssentialApps) { app ->
+                AppItemCard(
+                    name = app.appName,
+                    onClick = {
+                        context.onTriggerApp(app, viewModel::launchApp)
+                    },
+                    isEssential = true
+                )
+            }
+        }
+
+        // Limited apps section
+        if (filteredLimitedApps.isNotEmpty()) {
+            item {
+                if (activeCategory != "limited") {
                     Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = "Limited Access Apps",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+
+                    HorizontalDivider()
+                }
+            }
+
+            items(filteredLimitedApps) { app ->
+                val isInCooldown = viewModel.isAppInCooldown(app.packageName)
+                val cooldownTime = viewModel.getCooldownTimeRemaining(app.packageName)
+
+                AppItemCard(
+                    name = app.appName,
+                    onClick = {
+                        context.onTriggerApp(app, viewModel::launchApp)
+                    },
+                    isEssential = false,
+                    isInCooldown = isInCooldown,
+                    cooldownTimeRemaining = cooldownTime
+                )
+            }
+        }
+
+        // Empty state if no apps match the filter
+        if (filteredEssentialApps.isEmpty() && filteredLimitedApps.isEmpty()) {
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "No apps found matching \"$searchQuery\"",
+                        fontSize = 16.sp,
+                        textAlign = TextAlign.Center
+                    )
                 }
             }
         }
@@ -400,29 +379,39 @@ fun CategoryTab(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val animateContainerColor by animateColorAsState(
+        targetValue = if (isSelected)
+            MaterialTheme.colorScheme.primaryContainer
+        else
+            MaterialTheme.colorScheme.surfaceContainer
+    )
+    val animateTextColor by animateColorAsState(
+        targetValue = if (isSelected)
+            MaterialTheme.colorScheme.onPrimaryContainer
+        else
+            MaterialTheme.colorScheme.onSurface
+    )
     Card(
         modifier = modifier
-            .height(40.dp)
-            .clickable { onClick() },
-        shape = RoundedCornerShape(20.dp),
+            .noRippleClickable { onClick() },
+        shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-            else Color.White.copy(alpha = 0.05f)
+            containerColor = animateContainerColor
         ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = if (isSelected) 2.dp else 0.dp
-        )
     ) {
         Box(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(12.dp),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = title,
-                color = if (isSelected) MaterialTheme.colorScheme.primary
-                else Color.White.copy(alpha = 0.7f),
-                fontSize = 14.sp,
-                fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal
+                color = animateTextColor,
+                style = if (isSelected)
+                    MaterialTheme.typography.titleSmall
+                else
+                    MaterialTheme.typography.bodyMedium
             )
         }
     }
@@ -480,7 +469,6 @@ fun AppItemCard(
                     Text(
                         text = "Available in: ${formatTime(cooldownTimeRemaining)}",
                         fontSize = 12.sp,
-                        color = Color.White.copy(alpha = 0.5f)
                     )
                 }
             }
@@ -499,7 +487,6 @@ fun AppItemCard(
                     text = formatTime(cooldownTimeRemaining),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.primary
                 )
             }
         }
