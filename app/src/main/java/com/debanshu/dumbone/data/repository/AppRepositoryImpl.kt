@@ -1,10 +1,11 @@
 package com.debanshu.dumbone.data.repository
 
+import android.app.AppOpsManager
+import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
-import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.preferencesDataStore
+import android.os.Build
+import android.provider.Settings
 import com.debanshu.dumbone.data.local.AppUsageStatsDao
 import com.debanshu.dumbone.data.local.getAllAppUsageStats
 import com.debanshu.dumbone.data.local.getAppUsageStats
@@ -19,12 +20,43 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
+import android.os.Process
 
 class AppRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val preferencesRepository: PreferencesRepository,
     private val appUsageStatsDao: AppUsageStatsDao
 ) : AppRepository {
+
+    private val usageStatsManager =
+        context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
+
+    // Check if we have permission to access usage stats
+    override fun hasUsageStatsPermission(): Boolean {
+        val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+        val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            appOps.unsafeCheckOpNoThrow(
+                AppOpsManager.OPSTR_GET_USAGE_STATS,
+                Process.myUid(),
+                context.packageName
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            appOps.checkOpNoThrow(
+                AppOpsManager.OPSTR_GET_USAGE_STATS,
+                Process.myUid(),
+                context.packageName
+            )
+        }
+        return mode == AppOpsManager.MODE_ALLOWED
+    }
+
+    // Helper function to request permission
+    override fun requestUsageStatsPermission() {
+        val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        context.startActivity(intent)
+    }
 
     override suspend fun getInstalledApps(): List<AppInfo> {
         val packageManager = context.packageManager
@@ -119,9 +151,48 @@ class AppRepositoryImpl @Inject constructor(
                 )
             )
         }
+
+        // Update app usage duration from system
+        updateAppUsageDurations()
+    }
+
+    // New method to update app usage durations from UsageStatsManager
+    private suspend fun updateAppUsageDurations() {
+        if (!hasUsageStatsPermission() || usageStatsManager == null) {
+            return
+        }
+
+        try {
+            // Query for the last 24 hours
+            val endTime = System.currentTimeMillis()
+            val startTime = endTime - (24 * 60 * 60 * 1000) // 24 hours in milliseconds
+
+            val usageStatsMap = usageStatsManager.queryAndAggregateUsageStats(startTime, endTime)
+
+            // Get all our tracked apps
+            val currentStats = appUsageStatsDao.getAllAppUsageStats()
+
+            // Update each app's usage duration
+            for (stat in currentStats) {
+                usageStatsMap[stat.packageName]?.let { usageStat ->
+                    val totalTimeInForeground = usageStat.totalTimeInForeground
+
+                    // Only update if the system has a higher usage time
+                    if (totalTimeInForeground > stat.totalUsageDuration) {
+                        appUsageStatsDao.updateAppUsageStats(
+                            stat.copy(totalUsageDuration = totalTimeInForeground)
+                        )
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            // Handle exceptions (e.g., permission issues)
+        }
     }
 
     override suspend fun getAppUsageStats(): List<AppUsageStats> {
+        // Update usage durations before returning stats
+        updateAppUsageDurations()
         return appUsageStatsDao.getAllAppUsageStats()
     }
 

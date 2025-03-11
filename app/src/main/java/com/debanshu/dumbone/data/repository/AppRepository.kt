@@ -13,4 +13,10 @@ interface AppRepository {
     suspend fun recordAppUsage(packageName: String)
     suspend fun getAppUsageStats(): List<AppUsageStats>
     suspend fun resetCooldownTimers()
+
+    // Helper function to check if usage stats permission is granted
+    fun hasUsageStatsPermission(): Boolean
+
+    // Helper function to request usage stats permission
+    fun requestUsageStatsPermission()
 }

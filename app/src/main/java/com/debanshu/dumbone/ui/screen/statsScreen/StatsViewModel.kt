@@ -25,8 +25,16 @@ class StatsViewModel @Inject constructor(
     private val _allApps = MutableStateFlow<Map<String, AppInfo>>(emptyMap())
     val allApps: StateFlow<Map<String, AppInfo>> = _allApps.asStateFlow()
 
+    private val _needsPermission = MutableStateFlow(false)
+    val needsPermission: StateFlow<Boolean> = _needsPermission.asStateFlow()
+
     init {
+        checkPermission()
         loadData()
+    }
+
+    private fun checkPermission() {
+        _needsPermission.value = !appRepository.hasUsageStatsPermission()
     }
 
     private fun loadData() {
@@ -39,6 +47,11 @@ class StatsViewModel @Inject constructor(
     }
 
     fun refreshData() {
+        checkPermission()
         loadData()
+    }
+
+    fun requestUsageStatsPermission() {
+        appRepository.requestUsageStatsPermission()
     }
 }
