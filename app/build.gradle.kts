@@ -72,6 +72,7 @@ dependencies {
     implementation(libs.room.runtime.android)
 
     implementation(libs.androidx.datastore.preferences)
+    implementation("androidx.palette:palette:1.0.0")
 
     debugImplementation(libs.androidx.ui.tooling)
 }

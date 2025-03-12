@@ -1,14 +1,14 @@
 package com.debanshu.dumbone.data.model
 
 import android.graphics.drawable.Drawable
+import androidx.compose.ui.graphics.Color
 
-// App model representing an installed application
 data class AppInfo(
     val packageName: String,
     val appName: String,
     val icon: Drawable?,
     val isSystemApp: Boolean,
-    // Calculated fields
+    val dominantColor: Color = Color.Gray,
     var isEssential: Boolean = false,
     var isLimitedAccess: Boolean = false,
     var isHidden: Boolean = false

@@ -20,6 +20,16 @@ fun Long.formatDuration(): String {
     }
 }
 
+fun Long.formatTime(): String {
+    val minutes = TimeUnit.MILLISECONDS.toMinutes(this)
+    val seconds = TimeUnit.MILLISECONDS.toSeconds(this) % 60
+
+    return when {
+        minutes > 0 -> "$minutes:${seconds.toString().padStart(2, '0')}"
+        else -> "$seconds s"
+    }
+}
+
 
 fun Context.onTriggerApp(
     app: AppInfo,
@@ -43,3 +53,5 @@ fun Modifier.noRippleClickable(onClick: () -> Unit): Modifier = composed {
         onClick()
     }
 }
+
+

@@ -4,8 +4,15 @@ import android.app.AppOpsManager
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
 import android.os.Build
+import android.os.Process
 import android.provider.Settings
+import androidx.compose.ui.graphics.Color
+import androidx.palette.graphics.Palette
 import com.debanshu.dumbone.data.local.AppUsageStatsDao
 import com.debanshu.dumbone.data.local.getAllAppUsageStats
 import com.debanshu.dumbone.data.local.getAppUsageStats
@@ -17,10 +24,11 @@ import com.debanshu.dumbone.data.model.AppUsageStats
 import com.debanshu.dumbone.data.model.TimerCalculator
 import com.debanshu.dumbone.data.model.UserPreferences
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
-import android.os.Process
 
 class AppRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -58,7 +66,7 @@ class AppRepositoryImpl @Inject constructor(
         context.startActivity(intent)
     }
 
-    override suspend fun getInstalledApps(): List<AppInfo> {
+    override suspend fun getInstalledApps(): List<AppInfo> = withContext(Dispatchers.Default) {
         val packageManager = context.packageManager
         val intent = Intent(Intent.ACTION_MAIN, null)
         intent.addCategory(Intent.CATEGORY_LAUNCHER)
@@ -70,16 +78,49 @@ class AppRepositoryImpl @Inject constructor(
             val isSystemApp = (resolveInfo.activityInfo.applicationInfo.flags and
                     android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
 
+            // Extract dominant color from the app icon
+            val dominantColor = extractDominantColor(icon)
+
             AppInfo(
                 packageName = packageName,
                 appName = appName,
                 icon = icon,
-                isSystemApp = isSystemApp
+                isSystemApp = isSystemApp,
+                dominantColor = dominantColor
             )
         }
 
         // Sort apps alphabetically by name
-        return apps.sortedBy { it.appName }
+        apps.sortedBy { it.appName }
+    }
+
+    // Helper function to extract dominant color from app icon
+    private suspend fun extractDominantColor(drawable: Drawable?): Color = withContext(Dispatchers.Default) {
+        if (drawable == null) return@withContext Color.Gray
+
+        // Convert drawable to bitmap
+        val bitmap = try {
+            (drawable as? BitmapDrawable)?.bitmap ?: Bitmap.createBitmap(
+                drawable.intrinsicWidth.coerceAtLeast(1),
+                drawable.intrinsicHeight.coerceAtLeast(1),
+                Bitmap.Config.ARGB_8888
+            ).also { bitmap ->
+                val canvas = Canvas(bitmap)
+                drawable.setBounds(0, 0, canvas.width, canvas.height)
+                drawable.draw(canvas)
+            }
+        } catch (e: Exception) {
+            return@withContext Color.Gray
+        }
+
+        // Extract color using Palette API
+        return@withContext try {
+            val palette = Palette.from(bitmap).generate()
+            val defaultColor = 0x888888
+            Color(palette.getDominantColor(defaultColor))
+        } catch (e: Exception) {
+            Color.Gray
+        }
     }
 
     override suspend fun getEssentialApps(): List<AppInfo> {
