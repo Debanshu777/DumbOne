@@ -6,10 +6,10 @@ import com.debanshu.dumbone.data.model.AppInfo
 import com.debanshu.dumbone.data.repository.AppRepository
 import com.debanshu.dumbone.data.repository.PreferencesRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -28,6 +28,11 @@ class HomeViewModel @Inject constructor(
 
     init {
         loadData()
+        viewModelScope.launch {
+            preferencesRepository.userPreferences.collectLatest {
+                _isOnboardingCompleted.tryEmit(it.onboardingCompleted)
+            }
+        }
     }
 
     private fun loadData() {

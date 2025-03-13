@@ -5,10 +5,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
+import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -31,28 +31,23 @@ class MainActivity : ComponentActivity() {
         setContent {
             DumbOneTheme {
                 val homeViewModel = hiltViewModel<HomeViewModel>()
+                val onboardingViewModel = hiltViewModel<OnboardingViewModel>()
                 val isOnboardingCompleted by homeViewModel.isOnboardingCompleted.collectAsState()
 
-                if (!isOnboardingCompleted) {
-                    val onboardingViewModel = hiltViewModel<OnboardingViewModel>()
-                    Surface(
-                        modifier = Modifier.fillMaxSize(),
-                        color = MaterialTheme.colorScheme.background
-                    ) {
+                Scaffold(
+                    modifier = Modifier.fillMaxSize(),
+                ) { innerPadding ->
+                    if (!isOnboardingCompleted) {
                         OnboardingScreen(
+                            modifier = Modifier.padding(innerPadding),
                             viewModel = onboardingViewModel,
                             onComplete = { }
                         )
-                    }
-                } else {
-                    Surface(
-                        modifier = Modifier.fillMaxSize(),
-                        color = MaterialTheme.colorScheme.background
-                    ) {
+                    } else {
                         val pagerState = rememberPagerState(initialPage = 1) { 3 }
                         HorizontalPager(
                             state = pagerState,
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier.fillMaxSize().padding(innerPadding),
                             userScrollEnabled = true,
                             pageSpacing = 0.dp
                         ) { page ->

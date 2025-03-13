@@ -46,7 +46,8 @@ fun Context.onTriggerApp(
     }
 }
 
-fun Modifier.noRippleClickable(onClick: () -> Unit): Modifier = composed {
+fun Modifier.noRippleClickable(enabled: Boolean = true, onClick: () -> Unit): Modifier = composed {
+    if (!enabled) this
     this.clickable(
         indication = null,
         interactionSource = remember { MutableInteractionSource() }) {

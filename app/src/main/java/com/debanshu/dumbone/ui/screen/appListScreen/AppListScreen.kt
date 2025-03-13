@@ -1,17 +1,10 @@
 package com.debanshu.dumbone.ui.screen.appListScreen
 
-
 import android.graphics.drawable.Drawable
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.clipScrollableContainer
-import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -30,13 +22,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -46,9 +36,6 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -69,190 +56,223 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.debanshu.dumbone.ui.common.formatTime
 import com.debanshu.dumbone.ui.common.noRippleClickable
 import com.debanshu.dumbone.ui.common.onTriggerApp
+import com.debanshu.dumbone.ui.screen.appListScreen.model.AppCategory
+import com.debanshu.dumbone.ui.screen.appListScreen.model.AppWithCooldown
 
-@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
+/**
+ * Main screen for displaying app list with categories for essential and limited apps.
+ */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun AppListScreen(
     viewModel: AppListViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
-    val essentialApps by viewModel.essentialApps.collectAsState()
-    val limitedAppsWithCooldowns by viewModel.limitedAppsWithCooldowns.collectAsState()
-
-    var searchQuery by remember { mutableStateOf("") }
-    var activeCategory by remember { mutableStateOf("all") } // "all", "essential", "limited"
-
-    // Filter apps based on search query and category
-    val filteredEssentialApps = essentialApps.filter {
-        it.appName.contains(searchQuery, ignoreCase = true) &&
-                (activeCategory == "all" || activeCategory == "essential")
-    }
-
-    val filteredLimitedApps = limitedAppsWithCooldowns.filter {
-        it.appInfo.appName.contains(searchQuery, ignoreCase = true) &&
-                (activeCategory == "all" || activeCategory == "limited")
-    }
+    val uiState by viewModel.uiState.collectAsState()
 
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .systemBarsPadding()
             .padding(horizontal = 16.dp)
-            .clipScrollableContainer(Orientation.Vertical)
     ) {
         // Search field
         stickyHeader {
-            TextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                placeholder = {
-                    Text(
-                        "Search apps...",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                },
-                singleLine = true,
-                leadingIcon = {
-                    Icon(
-                        Icons.Outlined.Search,
-                        contentDescription = "Search",
-                    )
-                },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { searchQuery = "" }) {
-                            Icon(Icons.Filled.Clear, contentDescription = "Clear Text")
-                        }
-                    }
-                },
-                keyboardOptions = KeyboardOptions(
-                    imeAction = ImeAction.Search
-                ),
-                colors = TextFieldDefaults.colors(
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent
-                ),
-                shape = RoundedCornerShape(30.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.background)
-                    .padding(vertical = 12.dp),
+            SearchBar(
+                query = uiState.searchQuery,
+                onQueryChange = viewModel::onSearchQueryChanged,
             )
         }
 
+        // Category tabs
         item {
-            Row(
+            CategoryTabs(
+                selectedCategory = uiState.activeCategory,
+                onCategorySelected = viewModel::onCategorySelected,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.background)
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.Center
-            ) {
-                CategoryTab(
-                    title = "All",
-                    isSelected = activeCategory == "all",
-                    onClick = { activeCategory = "all" },
-                    modifier = Modifier.weight(1f)
-                )
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                CategoryTab(
-                    title = "Essential",
-                    isSelected = activeCategory == "essential",
-                    onClick = { activeCategory = "essential" },
-                    modifier = Modifier.weight(1f)
-                )
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                CategoryTab(
-                    title = "Limited",
-                    isSelected = activeCategory == "limited",
-                    onClick = { activeCategory = "limited" },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-        // Essential apps section
-        if (filteredEssentialApps.isNotEmpty()) {
-            item {
-                if (activeCategory != "essential") {
-                    Text(
-                        text = "Essential Apps",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
-                }
-            }
-
-            items(filteredEssentialApps) { app ->
-                AppItemCard(
-                    name = app.appName,
-                    icon = app.icon,
-                    onClick = {
-                        context.onTriggerApp(app, viewModel::launchApp)
-                    },
-                    accentColor = app.dominantColor
-                )
-            }
+                    .padding(vertical = 8.dp)
+            )
         }
 
-        // Limited apps section
-        if (filteredLimitedApps.isNotEmpty()) {
-            item {
-                if (activeCategory != "limited") {
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Text(
-                        text = "Limited Access Apps",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
-                }
-            }
-
-            items(filteredLimitedApps) { appWithCooldown ->
-                AppItemCard(
-                    name = appWithCooldown.appInfo.appName,
-                    icon = appWithCooldown.appInfo.icon,
-                    onClick = {
-                        context.onTriggerApp(appWithCooldown.appInfo, viewModel::launchApp)
-                    },
-                    isInCooldown = appWithCooldown.isInCooldown,
-                    cooldownTimeRemaining = appWithCooldown.cooldownTimeRemaining,
-                    accentColor = appWithCooldown.appInfo.dominantColor
-                )
-            }
-        }
-
-        // Empty state if no apps match the filter
-        if (filteredEssentialApps.isEmpty() && filteredLimitedApps.isEmpty()) {
+        // Loading state
+        if (uiState.isLoading) {
             item {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp),
+                        .height(200.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "No apps found matching \"$searchQuery\"",
-                        fontSize = 16.sp,
-                        textAlign = TextAlign.Center
+                    CircularProgressIndicator()
+                }
+            }
+        } else {
+            // Essential apps section
+            if (uiState.essentialApps.isNotEmpty()) {
+                item {
+                    if (uiState.activeCategory != AppCategory.ESSENTIAL) {
+                        SectionHeader(
+                            title = "Essential Apps",
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    }
+                }
+
+                items(
+                    items = uiState.essentialApps,
+                    key = { it.appName + it.packageName }
+                ) { app ->
+                    AppItemCard(
+                        name = app.appName,
+                        icon = app.icon,
+                        onClick = {
+                            context.onTriggerApp(app, viewModel::launchApp)
+                        },
+                        accentColor = app.dominantColor
                     )
                 }
             }
+
+            // Limited apps section
+            if (uiState.limitedApps.isNotEmpty()) {
+                item {
+                    if (uiState.activeCategory != AppCategory.LIMITED) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SectionHeader(
+                            title = "Limited Access Apps",
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    }
+                }
+
+                items(
+                    items = uiState.limitedApps,
+                    key = { it.appInfo.appName + it.appInfo.packageName }
+                ) { appWithCooldown ->
+                    AppItemWithCooldown(
+                        appWithCooldown = appWithCooldown,
+                        onClick = {
+                            if (!appWithCooldown.isInCooldown) {
+                                context.onTriggerApp(appWithCooldown.appInfo, viewModel::launchApp)
+                            }
+                            // In the real implementation, you would show a snackbar if in cooldown
+                        }
+                    )
+                }
+            }
+
+            // Empty state if no apps match the filter
+            if (!uiState.hasResults) {
+                item {
+                    EmptyState(searchQuery = uiState.searchQuery)
+                }
+            }
+        }
+
+        // Bottom padding
+        item {
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }
 
+/**
+ * Search bar component for filtering apps
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CategoryTab(
+private fun SearchBar(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    TextField(
+        value = query,
+        onValueChange = onQueryChange,
+        placeholder = {
+            Text(
+                "Search apps...",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        },
+        singleLine = true,
+        leadingIcon = {
+            Icon(
+                Icons.Outlined.Search,
+                contentDescription = "Search",
+                tint = MaterialTheme.colorScheme.onSurface
+            )
+        },
+        trailingIcon = {
+            if (query.isNotEmpty()) {
+                IconButton(onClick = { onQueryChange("") }) {
+                    Icon(
+                        Icons.Filled.Clear,
+                        contentDescription = "Clear Text",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        },
+        keyboardOptions = KeyboardOptions(
+            imeAction = ImeAction.Search
+        ),
+        colors = TextFieldDefaults.colors(
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+            focusedIndicatorColor = Color.Transparent,
+            unfocusedIndicatorColor = Color.Transparent
+        ),
+        shape = RoundedCornerShape(30.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(bottom = 12.dp)
+    )
+}
+
+/**
+ * Category tabs for filtering between all, essential, and limited apps
+ */
+@Composable
+private fun CategoryTabs(
+    selectedCategory: AppCategory,
+    onCategorySelected: (AppCategory) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        CategoryTab(
+            title = "All",
+            isSelected = selectedCategory == AppCategory.ALL,
+            onClick = { onCategorySelected(AppCategory.ALL) },
+            modifier = Modifier.weight(1f)
+        )
+
+        CategoryTab(
+            title = "Essential",
+            isSelected = selectedCategory == AppCategory.ESSENTIAL,
+            onClick = { onCategorySelected(AppCategory.ESSENTIAL) },
+            modifier = Modifier.weight(1f)
+        )
+
+        CategoryTab(
+            title = "Limited",
+            isSelected = selectedCategory == AppCategory.LIMITED,
+            onClick = { onCategorySelected(AppCategory.LIMITED) },
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+/**
+ * Individual category tab
+ */
+@Composable
+private fun CategoryTab(
     title: String,
     isSelected: Boolean,
     onClick: () -> Unit,
@@ -270,6 +290,7 @@ fun CategoryTab(
         else
             MaterialTheme.colorScheme.onSurface
     )
+
     Card(
         modifier = modifier
             .noRippleClickable { onClick() },
@@ -296,13 +317,30 @@ fun CategoryTab(
     }
 }
 
+/**
+ * Section header for app categories
+ */
 @Composable
-fun AppItemCard(
+private fun SectionHeader(
+    title: String,
+    modifier: Modifier = Modifier
+) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleLarge,
+        modifier = modifier
+    )
+}
+
+/**
+ * Card displaying app info with optional cooldown state
+ */
+@Composable
+private fun AppItemCard(
     name: String,
     icon: Drawable?,
     onClick: () -> Unit,
     isInCooldown: Boolean = false,
-    cooldownTimeRemaining: Long = 0,
     accentColor: Color = Color.Gray
 ) {
     val cardColor = when {
@@ -315,7 +353,7 @@ fun AppItemCard(
         else -> MaterialTheme.colorScheme.onSurface
     }
 
-    val gradientRadial = Brush.horizontalGradient(
+    val gradientBrush = Brush.horizontalGradient(
         listOf(
             if (!isInCooldown) accentColor.copy(alpha = 0.1f) else cardColor,
             cardColor,
@@ -327,13 +365,13 @@ fun AppItemCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
-            .clickable(enabled = !isInCooldown) { onClick() },
+            .noRippleClickable(enabled = !isInCooldown) { onClick() },
         shape = RoundedCornerShape(12.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(gradientRadial)
+                .background(gradientBrush)
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -352,27 +390,176 @@ fun AppItemCard(
 
             Spacer(modifier = Modifier.width(16.dp))
 
-            Row(
+            Text(
+                text = name,
+                color = textColor,
+                maxLines = 1,
+                style = MaterialTheme.typography.bodyLarge,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+/**
+ * Card displaying app info with cooldown state and circular progress
+ */
+@Composable
+private fun AppItemWithCooldown(
+    appWithCooldown: AppWithCooldown,
+    onClick: () -> Unit
+) {
+    val app = appWithCooldown.appInfo
+    val isInCooldown = appWithCooldown.isInCooldown
+
+    val cardColor = when {
+        isInCooldown -> MaterialTheme.colorScheme.surfaceContainer
+        else -> MaterialTheme.colorScheme.surfaceVariant
+    }
+
+    val textColor = when {
+        isInCooldown -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+
+    val gradientBrush = Brush.horizontalGradient(
+        listOf(
+            if (!isInCooldown) app.dominantColor.copy(alpha = 0.1f) else cardColor,
+            cardColor,
+            cardColor
+        ),
+    )
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .noRippleClickable() { onClick() },
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(gradientBrush)
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (app.icon != null) {
+                Image(
+                    bitmap = app.icon.toBitmap().asImageBitmap(),
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                    colorFilter = if (isInCooldown) {
+                        ColorFilter.colorMatrix(
+                            ColorMatrix().apply { setToSaturation(0f) }
+                        )
+                    } else null
+                )
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            // App name
+            Column(
                 modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Text(
-                    text = name,
-                    fontSize = 16.sp,
+                    text = app.appName,
                     color = textColor,
-                    fontWeight = FontWeight.Medium,
                     maxLines = 1,
+                    style = MaterialTheme.typography.bodyLarge,
                     overflow = TextOverflow.Ellipsis
                 )
-
-                if (isInCooldown && cooldownTimeRemaining > 0) {
-                    Spacer(modifier = Modifier.height(4.dp))
+                if (isInCooldown) {
                     Text(
-                        color = textColor,
-                        text = "Available in: ${cooldownTimeRemaining.formatTime()}",
-                        fontSize = 12.sp,
+                        text = "Locked",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
                     )
                 }
+            }
+
+            // Cooldown indicator
+            if (isInCooldown) {
+                CooldownIndicator(
+                    timeRemaining = appWithCooldown.cooldownTimeRemaining,
+                    progress = appWithCooldown.cooldownProgress
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Cooldown indicator with circular progress and time remaining
+ */
+@Composable
+private fun CooldownIndicator(
+    timeRemaining: Long,
+    progress: Float
+) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier.size(40.dp)
+    ) {
+        // Track (background)
+        CircularProgressIndicator(
+            progress = { 1f },
+            modifier = Modifier.size(40.dp),
+            color = MaterialTheme.colorScheme.primaryContainer,
+            strokeWidth = 2.dp
+        )
+
+        // Actual progress
+        CircularProgressIndicator(
+            progress = { progress },
+            modifier = Modifier.size(40.dp),
+            color = MaterialTheme.colorScheme.primary,
+            strokeWidth = 2.dp,
+            strokeCap = StrokeCap.Round
+        )
+
+        // Time remaining
+        Text(
+            text = timeRemaining.formatTime(),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+/**
+ * Empty state when no apps match the search query
+ */
+@Composable
+private fun EmptyState(searchQuery: String) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = "No apps found",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Medium,
+                textAlign = TextAlign.Center
+            )
+
+            if (searchQuery.isNotEmpty()) {
+                Text(
+                    text = "No apps match \"$searchQuery\"",
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
             }
         }
     }
