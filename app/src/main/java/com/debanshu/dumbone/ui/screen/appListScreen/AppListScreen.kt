@@ -1,10 +1,19 @@
 package com.debanshu.dumbone.ui.screen.appListScreen
 
 import android.graphics.drawable.Drawable
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,33 +27,46 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -69,171 +91,309 @@ fun AppListScreen(
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
+    val listState = rememberLazyListState()
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusRequester = remember { FocusRequester() }
 
-    LazyColumn(
+    // Track search focus state
+    var isSearchFocused by remember { mutableStateOf(false) }
+
+    // Function to clear focus and hide keyboard
+    val clearFocusAndHideKeyboard = {
+        if (isSearchFocused) {
+            focusManager.clearFocus()
+            keyboardController?.hide()
+        }
+    }
+
+    // Tracking scroll direction properly
+    var previousFirstVisibleItemIndex by remember { mutableIntStateOf(0) }
+    var previousFirstVisibleItemScrollOffset by remember { mutableIntStateOf(0) }
+    var isScrollingUp by remember { mutableStateOf(true) }
+
+    // Detect if we're at the top of the list
+    val isAtTop by remember {
+        derivedStateOf {
+            listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
+        }
+    }
+
+    // Properly track scroll direction
+    LaunchedEffect(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset) {
+        val currentIndex = listState.firstVisibleItemIndex
+        val currentOffset = listState.firstVisibleItemScrollOffset
+
+        // Detect scroll direction (simplified but reliable logic)
+        isScrollingUp = when {
+            // If we're at the top, consider scrolling up
+            currentIndex == 0 && currentOffset == 0 -> true
+
+            // If index decreased, we're scrolling up
+            currentIndex < previousFirstVisibleItemIndex -> true
+
+            // If index is the same but offset decreased, we're scrolling up
+            currentIndex == previousFirstVisibleItemIndex &&
+                    currentOffset < previousFirstVisibleItemScrollOffset -> true
+
+            // Otherwise, we're scrolling down
+            else -> false
+        }
+
+        // Unfocus search when scrolling down
+        if (!isScrollingUp && isSearchFocused) {
+            clearFocusAndHideKeyboard()
+        }
+
+        // Update previous position
+        previousFirstVisibleItemIndex = currentIndex
+        previousFirstVisibleItemScrollOffset = currentOffset
+    }
+
+    // Track pull-down gestures correctly
+    var lastKnownOffset by remember { mutableIntStateOf(0) }
+
+    // Detect pull-down at top for search focus
+    LaunchedEffect(listState.firstVisibleItemScrollOffset) {
+        if (isAtTop) {
+            // Detect a pull-down gesture
+            if (listState.firstVisibleItemScrollOffset < lastKnownOffset &&
+                lastKnownOffset > 0 && !isSearchFocused) {
+                // Pulling down at the top, focus the search
+                focusRequester.requestFocus()
+            }
+        }
+        lastKnownOffset = listState.firstVisibleItemScrollOffset
+    }
+
+    // Use a Box with tap detection for dismissing keyboard
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = {
+                        clearFocusAndHideKeyboard()
+                    }
+                )
+            }
     ) {
-        // Search field
-        stickyHeader {
+        Column(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            // Search bar with Cancel button
             SearchBar(
                 query = uiState.searchQuery,
                 onQueryChange = viewModel::onSearchQueryChanged,
-            )
-        }
-
-        // Category tabs
-        item {
-            CategoryTabs(
-                selectedCategory = uiState.activeCategory,
-                onCategorySelected = viewModel::onCategorySelected,
+                onClearClick = {
+                    viewModel.onSearchQueryChanged("")
+                    clearFocusAndHideKeyboard()
+                },
+                onFocusChanged = { isFocused ->
+                    isSearchFocused = isFocused
+                },
+                isSearchFocused = isSearchFocused,
+                focusRequester = focusRequester,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 8.dp)
+                    .padding(horizontal = 16.dp)
             )
-        }
 
-        // Loading state
-        if (uiState.isLoading) {
-            item {
-                Box(
+            // Category tabs with proper visibility logic
+            AnimatedVisibility(
+                visible = isScrollingUp || isAtTop,
+                enter = fadeIn(animationSpec = tween(150)) + expandVertically(animationSpec = tween(150)),
+                exit = fadeOut(animationSpec = tween(150)) + shrinkVertically(animationSpec = tween(150))
+            ) {
+                CategoryTabs(
+                    selectedCategory = uiState.activeCategory,
+                    onCategorySelected = {
+                        viewModel.onCategorySelected(it)
+                        clearFocusAndHideKeyboard()
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(200.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator()
-                }
-            }
-        } else {
-            // Essential apps section
-            if (uiState.essentialApps.isNotEmpty()) {
-                item {
-                    if (uiState.activeCategory != AppCategory.ESSENTIAL) {
-                        SectionHeader(
-                            title = "Essential Apps",
-                            modifier = Modifier.padding(vertical = 8.dp)
-                        )
-                    }
-                }
-
-                items(
-                    items = uiState.essentialApps,
-                    key = { it.appName + it.packageName }
-                ) { app ->
-                    AppItemCard(
-                        name = app.appName,
-                        icon = app.icon,
-                        onClick = {
-                            context.onTriggerApp(app, viewModel::launchApp)
-                        },
-                        accentColor = app.dominantColor
-                    )
-                }
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                )
             }
 
-            // Limited apps section
-            if (uiState.limitedApps.isNotEmpty()) {
-                item {
-                    if (uiState.activeCategory != AppCategory.LIMITED) {
-                        Spacer(modifier = Modifier.height(16.dp))
-                        SectionHeader(
-                            title = "Limited Access Apps",
-                            modifier = Modifier.padding(vertical = 8.dp)
-                        )
-                    }
-                }
-
-                items(
-                    items = uiState.limitedApps,
-                    key = { it.appInfo.appName + it.appInfo.packageName }
-                ) { appWithCooldown ->
-                    AppItemWithCooldown(
-                        appWithCooldown = appWithCooldown,
-                        onClick = {
-                            if (!appWithCooldown.isInCooldown) {
-                                context.onTriggerApp(appWithCooldown.appInfo, viewModel::launchApp)
-                            }
-                            // In the real implementation, you would show a snackbar if in cooldown
+            // Main content list
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp)
+            ) {
+                // Loading state
+                if (uiState.isLoading) {
+                    item(key = "loading") {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
                         }
-                    )
+                    }
+                } else {
+                    // Essential apps section
+                    if (uiState.essentialApps.isNotEmpty()) {
+                        item(key = "essential_header") {
+                            if (uiState.activeCategory != AppCategory.ESSENTIAL) {
+                                SectionHeader(
+                                    title = "Essential Apps",
+                                    modifier = Modifier.padding(vertical = 8.dp)
+                                )
+                            }
+                        }
+
+                        items(
+                            items = uiState.essentialApps,
+                            key = { it.appName + it.packageName }
+                        ) { app ->
+                            AppItemCard(
+                                name = app.appName,
+                                icon = app.icon,
+                                onClick = {
+                                    clearFocusAndHideKeyboard()
+                                    context.onTriggerApp(app, viewModel::launchApp)
+                                },
+                                accentColor = app.dominantColor
+                            )
+                        }
+                    }
+
+                    // Limited apps section
+                    if (uiState.limitedApps.isNotEmpty()) {
+                        item(key = "limited_header") {
+                            if (uiState.activeCategory != AppCategory.LIMITED) {
+                                Spacer(modifier = Modifier.height(16.dp))
+                                SectionHeader(
+                                    title = "Limited Access Apps",
+                                    modifier = Modifier.padding(vertical = 8.dp)
+                                )
+                            }
+                        }
+
+                        items(
+                            items = uiState.limitedApps,
+                            key = { it.appInfo.appName + it.appInfo.packageName }
+                        ) { appWithCooldown ->
+                            AppItemWithCooldown(
+                                appWithCooldown = appWithCooldown,
+                                onClick = {
+                                    clearFocusAndHideKeyboard()
+                                    if (!appWithCooldown.isInCooldown) {
+                                        context.onTriggerApp(appWithCooldown.appInfo, viewModel::launchApp)
+                                    }
+                                }
+                            )
+                        }
+                    }
+
+                    // Empty state if no apps match the filter
+                    if (!uiState.hasResults) {
+                        item(key = "empty_state") {
+                            EmptyState(searchQuery = uiState.searchQuery)
+                        }
+                    }
+                }
+
+                // Bottom padding
+                item(key = "bottom_padding") {
+                    Spacer(modifier = Modifier.height(16.dp))
                 }
             }
-
-            // Empty state if no apps match the filter
-            if (!uiState.hasResults) {
-                item {
-                    EmptyState(searchQuery = uiState.searchQuery)
-                }
-            }
-        }
-
-        // Bottom padding
-        item {
-            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }
 
 /**
- * Search bar component for filtering apps
+ * Search bar component with cancel button
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SearchBar(
     query: String,
     onQueryChange: (String) -> Unit,
+    onClearClick: () -> Unit,
+    onFocusChanged: (Boolean) -> Unit,
+    isSearchFocused: Boolean,
+    focusRequester: FocusRequester,
     modifier: Modifier = Modifier
 ) {
-    TextField(
-        value = query,
-        onValueChange = onQueryChange,
-        placeholder = {
-            Text(
-                "Search apps...",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        },
-        singleLine = true,
-        leadingIcon = {
-            Icon(
-                Icons.Outlined.Search,
-                contentDescription = "Search",
-                tint = MaterialTheme.colorScheme.onSurface
-            )
-        },
-        trailingIcon = {
-            if (query.isNotEmpty()) {
-                IconButton(onClick = { onQueryChange("") }) {
-                    Icon(
-                        Icons.Filled.Clear,
-                        contentDescription = "Clear Text",
-                        tint = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-            }
-        },
-        keyboardOptions = KeyboardOptions(
-            imeAction = ImeAction.Search
-        ),
-        colors = TextFieldDefaults.colors(
-            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-            focusedIndicatorColor = Color.Transparent,
-            unfocusedIndicatorColor = Color.Transparent
-        ),
-        shape = RoundedCornerShape(30.dp),
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(bottom = 12.dp)
-    )
+    ) {
+        // Search TextField
+        TextField(
+            value = query,
+            onValueChange = onQueryChange,
+            placeholder = {
+                Text(
+                    "Search apps...",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            },
+            singleLine = true,
+            leadingIcon = {
+                Icon(
+                    Icons.Outlined.Search,
+                    contentDescription = "Search",
+                    tint = MaterialTheme.colorScheme.onSurface
+                )
+            },
+            keyboardOptions = KeyboardOptions(
+                imeAction = ImeAction.Search
+            ),
+            keyboardActions = KeyboardActions(
+                onSearch = {
+                    keyboardController?.hide()
+                    focusManager.clearFocus()
+                }
+            ),
+            colors = TextFieldDefaults.colors(
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent
+            ),
+            shape = RoundedCornerShape(30.dp),
+            modifier = Modifier
+                .weight(1f)
+                .background(MaterialTheme.colorScheme.background)
+                .padding(bottom = 12.dp)
+                .focusRequester(focusRequester)
+                .onFocusChanged { onFocusChanged(it.isFocused) }
+        )
+
+        // Animated Cancel button - show when focused
+        AnimatedVisibility(
+            visible = isSearchFocused,
+            enter = fadeIn() + expandHorizontally(expandFrom = Alignment.Start),
+            exit = fadeOut() + shrinkHorizontally(shrinkTowards = Alignment.Start)
+        ) {
+            TextButton(
+                onClick = onClearClick,
+                modifier = Modifier.padding(start = 8.dp, bottom = 12.dp)
+            ) {
+                Text(
+                    text = "Cancel",
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+    }
 }
 
 /**
- * Category tabs for filtering between all, essential, and limited apps
+ * Category tabs component
  */
 @Composable
 private fun CategoryTabs(
@@ -301,7 +461,6 @@ private fun CategoryTab(
     ) {
         Box(
             modifier = Modifier
-                .fillMaxSize()
                 .padding(12.dp),
             contentAlignment = Alignment.Center
         ) {
@@ -318,7 +477,7 @@ private fun CategoryTab(
 }
 
 /**
- * Section header for app categories
+ * Section header component
  */
 @Composable
 private fun SectionHeader(
@@ -343,22 +502,23 @@ private fun AppItemCard(
     isInCooldown: Boolean = false,
     accentColor: Color = Color.Gray
 ) {
-    val cardColor = when {
-        isInCooldown -> MaterialTheme.colorScheme.surfaceContainer
-        else -> MaterialTheme.colorScheme.surfaceVariant
-    }
+    // Only remember what needs to be remembered
+    val cardColor = if (isInCooldown)
+        MaterialTheme.colorScheme.surfaceContainer
+    else
+        MaterialTheme.colorScheme.surfaceVariant
 
-    val textColor = when {
-        isInCooldown -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-        else -> MaterialTheme.colorScheme.onSurface
-    }
+    val textColor = if (isInCooldown)
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+    else
+        MaterialTheme.colorScheme.onSurface
 
     val gradientBrush = Brush.horizontalGradient(
         listOf(
             if (!isInCooldown) accentColor.copy(alpha = 0.1f) else cardColor,
             cardColor,
             cardColor
-        ),
+        )
     )
 
     Card(
@@ -381,9 +541,7 @@ private fun AppItemCard(
                     contentDescription = null,
                     modifier = Modifier.size(24.dp),
                     colorFilter = if (isInCooldown) {
-                        ColorFilter.colorMatrix(
-                            ColorMatrix().apply { setToSaturation(0f) }
-                        )
+                        ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) })
                     } else null
                 )
             }
@@ -412,22 +570,22 @@ private fun AppItemWithCooldown(
     val app = appWithCooldown.appInfo
     val isInCooldown = appWithCooldown.isInCooldown
 
-    val cardColor = when {
-        isInCooldown -> MaterialTheme.colorScheme.surfaceContainer
-        else -> MaterialTheme.colorScheme.surfaceVariant
-    }
+    val cardColor = if (isInCooldown)
+        MaterialTheme.colorScheme.surfaceContainer
+    else
+        MaterialTheme.colorScheme.surfaceVariant
 
-    val textColor = when {
-        isInCooldown -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-        else -> MaterialTheme.colorScheme.onSurface
-    }
+    val textColor = if (isInCooldown)
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+    else
+        MaterialTheme.colorScheme.onSurface
 
     val gradientBrush = Brush.horizontalGradient(
         listOf(
             if (!isInCooldown) app.dominantColor.copy(alpha = 0.1f) else cardColor,
             cardColor,
             cardColor
-        ),
+        )
     )
 
     Card(
@@ -450,9 +608,7 @@ private fun AppItemWithCooldown(
                     contentDescription = null,
                     modifier = Modifier.size(24.dp),
                     colorFilter = if (isInCooldown) {
-                        ColorFilter.colorMatrix(
-                            ColorMatrix().apply { setToSaturation(0f) }
-                        )
+                        ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) })
                     } else null
                 )
             }

@@ -4,8 +4,11 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.Scaffold
@@ -47,7 +50,9 @@ class MainActivity : ComponentActivity() {
                         val pagerState = rememberPagerState(initialPage = 1) { 3 }
                         HorizontalPager(
                             state = pagerState,
-                            modifier = Modifier.fillMaxSize().padding(innerPadding),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(innerPadding),
                             userScrollEnabled = true,
                             pageSpacing = 0.dp
                         ) { page ->
