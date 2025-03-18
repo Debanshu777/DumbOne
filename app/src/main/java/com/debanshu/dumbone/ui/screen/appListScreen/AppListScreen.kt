@@ -54,6 +54,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -83,6 +84,7 @@ import com.debanshu.dumbone.ui.common.noRippleClickable
 import com.debanshu.dumbone.ui.common.onTriggerApp
 import com.debanshu.dumbone.ui.screen.appListScreen.model.AppCategory
 import com.debanshu.dumbone.ui.screen.appListScreen.model.AppWithCooldown
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 /**
  * Main screen for displaying app list with categories for essential and limited apps.
@@ -102,7 +104,7 @@ fun AppListScreen(
     // Track search focus state
     var isSearchFocused by remember { mutableStateOf(false) }
 
-    // Function to clear focus and hide keyboard
+   // Function to clear focus and hide keyboard
     val clearFocusAndHideKeyboard = {
         if (isSearchFocused) {
             focusManager.clearFocus()
@@ -111,22 +113,29 @@ fun AppListScreen(
     }
 
     var isScrollingUp by remember { mutableStateOf(true) }
-    var pullToRefreshState = rememberPullToRefreshState()
+    val pullToRefreshState = rememberPullToRefreshState()
 
-    LaunchedEffect(listState.firstVisibleItemScrollOffset) {
-        when {
-            listState.lastScrolledBackward -> {
-                isScrollingUp = true
-            }
-
-            listState.lastScrolledForward -> {
-                clearFocusAndHideKeyboard()
-                isScrollingUp = false
-            }
+    // Monitor scroll direction using snapshotFlow
+    LaunchedEffect(listState) {
+        snapshotFlow {
+            // Track scroll direction without causing recompositions on every scroll
+            Pair(listState.lastScrolledForward, listState.lastScrolledBackward)
         }
+            .distinctUntilChanged()
+            .collect { (forward, backward) ->
+                when {
+                    forward -> {
+                        clearFocusAndHideKeyboard()
+                        isScrollingUp = false
+                    }
+
+                    backward -> {
+                        isScrollingUp = true
+                    }
+                }
+            }
     }
 
-    // Use a Box with tap detection for dismissing keyboard
     PullToRefreshBox(
         state = pullToRefreshState,
         isRefreshing = false,
