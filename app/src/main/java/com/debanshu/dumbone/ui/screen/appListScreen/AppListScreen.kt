@@ -43,6 +43,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -63,6 +65,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -107,67 +110,31 @@ fun AppListScreen(
         }
     }
 
-    // Tracking scroll direction properly
-    var previousFirstVisibleItemIndex by remember { mutableIntStateOf(0) }
-    var previousFirstVisibleItemScrollOffset by remember { mutableIntStateOf(0) }
     var isScrollingUp by remember { mutableStateOf(true) }
+    var pullToRefreshState = rememberPullToRefreshState()
 
-    // Detect if we're at the top of the list
-    val isAtTop by remember {
-        derivedStateOf {
-            listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
-        }
-    }
-
-    // Properly track scroll direction
-    LaunchedEffect(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset) {
-        val currentIndex = listState.firstVisibleItemIndex
-        val currentOffset = listState.firstVisibleItemScrollOffset
-
-        // Detect scroll direction (simplified but reliable logic)
-        isScrollingUp = when {
-            // If we're at the top, consider scrolling up
-            currentIndex == 0 && currentOffset == 0 -> true
-
-            // If index decreased, we're scrolling up
-            currentIndex < previousFirstVisibleItemIndex -> true
-
-            // If index is the same but offset decreased, we're scrolling up
-            currentIndex == previousFirstVisibleItemIndex &&
-                    currentOffset < previousFirstVisibleItemScrollOffset -> true
-
-            // Otherwise, we're scrolling down
-            else -> false
-        }
-
-        // Unfocus search when scrolling down
-        if (!isScrollingUp && isSearchFocused) {
-            clearFocusAndHideKeyboard()
-        }
-
-        // Update previous position
-        previousFirstVisibleItemIndex = currentIndex
-        previousFirstVisibleItemScrollOffset = currentOffset
-    }
-
-    // Track pull-down gestures correctly
-    var lastKnownOffset by remember { mutableIntStateOf(0) }
-
-    // Detect pull-down at top for search focus
     LaunchedEffect(listState.firstVisibleItemScrollOffset) {
-        if (isAtTop) {
-            // Detect a pull-down gesture
-            if (listState.firstVisibleItemScrollOffset < lastKnownOffset &&
-                lastKnownOffset > 0 && !isSearchFocused) {
-                // Pulling down at the top, focus the search
-                focusRequester.requestFocus()
+        when {
+            listState.lastScrolledBackward -> {
+                isScrollingUp = true
+            }
+
+            listState.lastScrolledForward -> {
+                clearFocusAndHideKeyboard()
+                isScrollingUp = false
             }
         }
-        lastKnownOffset = listState.firstVisibleItemScrollOffset
     }
 
     // Use a Box with tap detection for dismissing keyboard
-    Box(
+    PullToRefreshBox(
+        state = pullToRefreshState,
+        isRefreshing = false,
+        onRefresh = {
+            isScrollingUp = true
+            focusRequester.requestFocus()
+        },
+        indicator = {},
         modifier = Modifier
             .fillMaxSize()
             .pointerInput(Unit) {
@@ -178,132 +145,133 @@ fun AppListScreen(
                 )
             }
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize()
+        // Main content list
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxSize()
         ) {
             // Search bar with Cancel button
-            SearchBar(
-                query = uiState.searchQuery,
-                onQueryChange = viewModel::onSearchQueryChanged,
-                onClearClick = {
-                    viewModel.onSearchQueryChanged("")
-                    clearFocusAndHideKeyboard()
-                },
-                onFocusChanged = { isFocused ->
-                    isSearchFocused = isFocused
-                },
-                isSearchFocused = isSearchFocused,
-                focusRequester = focusRequester,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-            )
-
-            // Category tabs with proper visibility logic
-            AnimatedVisibility(
-                visible = isScrollingUp || isAtTop,
-                enter = fadeIn(animationSpec = tween(150)) + expandVertically(animationSpec = tween(150)),
-                exit = fadeOut(animationSpec = tween(150)) + shrinkVertically(animationSpec = tween(150))
-            ) {
-                CategoryTabs(
-                    selectedCategory = uiState.activeCategory,
-                    onCategorySelected = {
-                        viewModel.onCategorySelected(it)
+            stickyHeader {
+                SearchBar(
+                    query = uiState.searchQuery,
+                    onQueryChange = viewModel::onSearchQueryChanged,
+                    onClearClick = {
+                        viewModel.onSearchQueryChanged("")
                         clearFocusAndHideKeyboard()
                     },
+                    onFocusChanged = { isFocused ->
+                        isSearchFocused = isFocused
+                    },
+                    isSearchFocused = isSearchFocused,
+                    focusRequester = focusRequester,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
                 )
+
+                // Category tabs with proper visibility logic
+                AnimatedVisibility(
+                    modifier = Modifier
+                        .background(MaterialTheme.colorScheme.background),
+                    visible = isScrollingUp,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
+                ) {
+                    CategoryTabs(
+                        selectedCategory = uiState.activeCategory,
+                        onCategorySelected = {
+                            viewModel.onCategorySelected(it)
+                            clearFocusAndHideKeyboard()
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp)
+                    )
+                }
+            }
+            // Loading state
+            if (uiState.isLoading) {
+                item(key = "loading") {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                }
+            } else {
+                // Essential apps section
+                if (uiState.essentialApps.isNotEmpty()) {
+                    item(key = "essential_header") {
+                        if (uiState.activeCategory != AppCategory.ESSENTIAL) {
+                            SectionHeader(
+                                title = "Essential Apps",
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                        }
+                    }
+
+                    items(
+                        items = uiState.essentialApps,
+                        key = { it.appName + it.packageName }
+                    ) { app ->
+                        AppItemCard(
+                            name = app.appName,
+                            icon = app.icon,
+                            onClick = {
+                                clearFocusAndHideKeyboard()
+                                context.onTriggerApp(app, viewModel::launchApp)
+                            },
+                            accentColor = app.dominantColor
+                        )
+                    }
+                }
+
+                // Limited apps section
+                if (uiState.limitedApps.isNotEmpty()) {
+                    item(key = "limited_header") {
+                        if (uiState.activeCategory != AppCategory.LIMITED) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            SectionHeader(
+                                title = "Limited Access Apps",
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                        }
+                    }
+
+                    items(
+                        items = uiState.limitedApps,
+                        key = { it.appInfo.appName + it.appInfo.packageName }
+                    ) { appWithCooldown ->
+                        AppItemWithCooldown(
+                            appWithCooldown = appWithCooldown,
+                            onClick = {
+                                clearFocusAndHideKeyboard()
+                                if (!appWithCooldown.isInCooldown) {
+                                    context.onTriggerApp(
+                                        appWithCooldown.appInfo,
+                                        viewModel::launchApp
+                                    )
+                                }
+                            }
+                        )
+                    }
+                }
+
+                // Empty state if no apps match the filter
+                if (!uiState.hasResults) {
+                    item(key = "empty_state") {
+                        EmptyState(searchQuery = uiState.searchQuery)
+                    }
+                }
             }
 
-            // Main content list
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp)
-            ) {
-                // Loading state
-                if (uiState.isLoading) {
-                    item(key = "loading") {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(200.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator()
-                        }
-                    }
-                } else {
-                    // Essential apps section
-                    if (uiState.essentialApps.isNotEmpty()) {
-                        item(key = "essential_header") {
-                            if (uiState.activeCategory != AppCategory.ESSENTIAL) {
-                                SectionHeader(
-                                    title = "Essential Apps",
-                                    modifier = Modifier.padding(vertical = 8.dp)
-                                )
-                            }
-                        }
-
-                        items(
-                            items = uiState.essentialApps,
-                            key = { it.appName + it.packageName }
-                        ) { app ->
-                            AppItemCard(
-                                name = app.appName,
-                                icon = app.icon,
-                                onClick = {
-                                    clearFocusAndHideKeyboard()
-                                    context.onTriggerApp(app, viewModel::launchApp)
-                                },
-                                accentColor = app.dominantColor
-                            )
-                        }
-                    }
-
-                    // Limited apps section
-                    if (uiState.limitedApps.isNotEmpty()) {
-                        item(key = "limited_header") {
-                            if (uiState.activeCategory != AppCategory.LIMITED) {
-                                Spacer(modifier = Modifier.height(16.dp))
-                                SectionHeader(
-                                    title = "Limited Access Apps",
-                                    modifier = Modifier.padding(vertical = 8.dp)
-                                )
-                            }
-                        }
-
-                        items(
-                            items = uiState.limitedApps,
-                            key = { it.appInfo.appName + it.appInfo.packageName }
-                        ) { appWithCooldown ->
-                            AppItemWithCooldown(
-                                appWithCooldown = appWithCooldown,
-                                onClick = {
-                                    clearFocusAndHideKeyboard()
-                                    if (!appWithCooldown.isInCooldown) {
-                                        context.onTriggerApp(appWithCooldown.appInfo, viewModel::launchApp)
-                                    }
-                                }
-                            )
-                        }
-                    }
-
-                    // Empty state if no apps match the filter
-                    if (!uiState.hasResults) {
-                        item(key = "empty_state") {
-                            EmptyState(searchQuery = uiState.searchQuery)
-                        }
-                    }
-                }
-
-                // Bottom padding
-                item(key = "bottom_padding") {
-                    Spacer(modifier = Modifier.height(16.dp))
-                }
+            // Bottom padding
+            item(key = "bottom_padding") {
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }
@@ -375,9 +343,11 @@ private fun SearchBar(
 
         // Animated Cancel button - show when focused
         AnimatedVisibility(
+            modifier = Modifier
+                .background(MaterialTheme.colorScheme.background),
             visible = isSearchFocused,
             enter = fadeIn() + expandHorizontally(expandFrom = Alignment.Start),
-            exit = fadeOut() + shrinkHorizontally(shrinkTowards = Alignment.Start)
+            exit = fadeOut() + shrinkHorizontally(shrinkTowards = Alignment.End)
         ) {
             TextButton(
                 onClick = onClearClick,
@@ -461,12 +431,14 @@ private fun CategoryTab(
     ) {
         Box(
             modifier = Modifier
-                .padding(12.dp),
+                .padding(12.dp)
+                .fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = title,
                 color = animateTextColor,
+                textAlign = TextAlign.Center,
                 style = if (isSelected)
                     MaterialTheme.typography.titleSmall
                 else
