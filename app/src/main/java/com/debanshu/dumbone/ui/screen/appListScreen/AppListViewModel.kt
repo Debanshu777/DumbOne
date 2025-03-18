@@ -10,12 +10,13 @@ import com.debanshu.dumbone.ui.screen.appListScreen.model.AppListUiState
 import com.debanshu.dumbone.ui.screen.appListScreen.model.AppWithCooldown
 import com.debanshu.dumbone.ui.screen.appListScreen.model.CooldownInfo
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -28,59 +29,37 @@ class AppListViewModel @Inject constructor(
     private val appRepository: AppRepository,
 ) : ViewModel() {
 
+    // --- State flows ---
+    private val _essentialApps = MutableStateFlow<List<AppInfo>>(emptyList())
+    private val _limitedApps = MutableStateFlow<List<AppInfo>>(emptyList())
+    private val _cooldowns = MutableStateFlow<Map<String, CooldownInfo>>(emptyMap())
+    private val _totalCooldownTimes = MutableStateFlow<Map<String, Long>>(emptyMap())
+    private val _searchQuery = MutableStateFlow("")
+    private val _activeCategory = MutableStateFlow(AppCategory.ALL)
+    private val _isLoading = MutableStateFlow(true)
 
+    // --- UI State ---
     private val _uiState = MutableStateFlow(AppListUiState())
     val uiState: StateFlow<AppListUiState> = _uiState.asStateFlow()
 
-    private val _essentialApps = MutableStateFlow<List<AppInfo>>(emptyList())
-    private val _limitedApps = MutableStateFlow<List<AppInfo>>(emptyList())
-    private val _cooldownRefreshTrigger = MutableStateFlow(System.currentTimeMillis())
-    private val _searchQuery = MutableStateFlow("")
-    private val _activeCategory = MutableStateFlow(AppCategory.ALL)
+    // --- Cooldown ticker job ---
+    private var cooldownTickerJob: Job? = null
 
-    private val cooldownTicker = kotlinx.coroutines.flow.flow {
-        while (true) {
-            emit(System.currentTimeMillis())
-            kotlinx.coroutines.delay(1000)
+    // --- Derived states ---
+    private val filteredEssentialApps = combine(
+        _essentialApps,
+        _searchQuery,
+        _activeCategory
+    ) { apps, query, category ->
+        apps.filter {
+            it.appName.contains(query, ignoreCase = true) &&
+                    (category == AppCategory.ALL || category == AppCategory.ESSENTIAL)
         }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), System.currentTimeMillis())
-
-    private val appUsageStats = _cooldownRefreshTrigger.map {
-        appRepository.getAppUsageStats()
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    private val cooldowns = combine(appUsageStats, cooldownTicker) { stats, currentTime ->
-        stats.mapNotNull { stat ->
-            stat.currentCooldownExpiry?.let { expiry ->
-                if (expiry > currentTime) {
-                    // Simple calculation for progress:
-                    // 1. Get the remaining time
-                    val remainingTime = expiry - currentTime
-
-                    // 2. Determine approximately when the cooldown was set
-                    // (using TimerCalculator's pattern)
-                    val usageCount = stat.usageCount
-                    val totalCooldownTime = TimerCalculator.calculateCooldownTime(usageCount)
-
-                    // 3. Calculate elapsed time as a percentage of total time
-                    val elapsedTime = totalCooldownTime - remainingTime
-                    val progress = (elapsedTime.toFloat() / totalCooldownTime.toFloat()).coerceIn(0f, 1f)
-
-                    Pair(stat.packageName, CooldownInfo(
-                        isInCooldown = true,
-                        timeRemaining = remainingTime,
-                        progress = progress
-                    ))
-                } else {
-                    Pair(stat.packageName, CooldownInfo(isInCooldown = false, timeRemaining = 0L, progress = 0f))
-                }
-            }
-        }.toMap()
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
-
-    val limitedAppsWithCooldowns = combine(
+    private val limitedAppsWithCooldowns = combine(
         _limitedApps,
-        cooldowns,
+        _cooldowns,
         _searchQuery,
         _activeCategory
     ) { apps, cooldownMap, query, category ->
@@ -98,83 +77,222 @@ class AppListViewModel @Inject constructor(
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val filteredEssentialApps = combine(
-        _essentialApps,
-        _searchQuery,
-        _activeCategory
-    ) { apps, query, category ->
-        apps.filter {
-            it.appName.contains(query, ignoreCase = true) &&
-                    (category == AppCategory.ALL || category == AppCategory.ESSENTIAL)
-        }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
     init {
         loadApps()
         observeState()
     }
 
+    /**
+     * Observe changes to the state and update the UI state
+     */
     private fun observeState() {
         viewModelScope.launch {
             combine(
                 filteredEssentialApps,
                 limitedAppsWithCooldowns,
                 _searchQuery,
-                _activeCategory
-            ) { essentialApps, limitedApps, query, category ->
+                _activeCategory,
+                _isLoading
+            ) { essential, limited, query, category, isLoading ->
                 AppListUiState(
-                    isLoading = false,
+                    isLoading = isLoading,
                     searchQuery = query,
                     activeCategory = category,
-                    essentialApps = essentialApps,
-                    limitedApps = limitedApps,
-                    hasResults = essentialApps.isNotEmpty() || limitedApps.isNotEmpty()
+                    essentialApps = essential,
+                    limitedApps = limited,
+                    hasResults = essential.isNotEmpty() || limited.isNotEmpty()
                 )
             }.collect { state ->
                 _uiState.value = state
+
+                // Start or stop ticker based on active cooldowns
+                val hasActiveCooldowns = _cooldowns.value.any { it.value.isInCooldown }
+                if (hasActiveCooldowns) {
+                    startCooldownTicker()
+                } else {
+                    stopCooldownTicker()
+                }
             }
         }
     }
 
+    /**
+     * Load apps and cooldown information
+     */
     private fun loadApps() {
         viewModelScope.launch {
             try {
-                _uiState.value = _uiState.value.copy(isLoading = true)
+                _isLoading.value = true
+
+                // Load apps
                 val essential = appRepository.getEssentialApps()
                 val limited = appRepository.getLimitedApps()
 
                 _essentialApps.value = essential
                 _limitedApps.value = limited
 
-                refreshUsageStats()
+                // Load cooldowns
+                refreshCooldowns()
+
+                _isLoading.value = false
             } catch (e: Exception) {
-                // Handle error state
-            } finally {
-                _uiState.value = _uiState.value.copy(isLoading = false)
+                _isLoading.value = false
             }
         }
     }
 
-    private fun refreshUsageStats() {
-        _cooldownRefreshTrigger.value = System.currentTimeMillis()
+    /**
+     * Refresh cooldown information from repository
+     */
+    private fun refreshCooldowns() {
+        viewModelScope.launch {
+            try {
+                val currentTime = System.currentTimeMillis()
+                val stats = appRepository.getAppUsageStats()
+
+                val cooldowns = mutableMapOf<String, CooldownInfo>()
+                val totalTimes = mutableMapOf<String, Long>()
+
+                for (stat in stats) {
+                    val expiry = stat.currentCooldownExpiry
+                    if (expiry != null && expiry > currentTime) {
+                        // App is in cooldown
+                        val remainingTime = expiry - currentTime
+                        val totalTime = TimerCalculator.calculateCooldownTime(stat.usageCount)
+
+                        totalTimes[stat.packageName] = totalTime
+
+                        val elapsedTime = totalTime - remainingTime
+                        val progress =
+                            (elapsedTime.toFloat() / totalTime.toFloat()).coerceIn(0f, 1f)
+
+                        cooldowns[stat.packageName] = CooldownInfo(
+                            isInCooldown = true,
+                            timeRemaining = remainingTime,
+                            progress = progress
+                        )
+                    } else {
+                        // App is not in cooldown
+                        cooldowns[stat.packageName] = CooldownInfo()
+                        totalTimes[stat.packageName] = 0L
+                    }
+                }
+
+                _cooldowns.value = cooldowns
+                _totalCooldownTimes.value = totalTimes
+            } catch (e: Exception) {
+                // Handle errors if needed
+            }
+        }
     }
 
+    /**
+     * Start the cooldown ticker to update timers every second
+     */
+    private fun startCooldownTicker() {
+        if (cooldownTickerJob != null) return
+
+        cooldownTickerJob = viewModelScope.launch {
+            while (true) {
+                delay(1000) // 1 second delay
+                updateCooldownsLocally()
+
+                // Stop if no more active cooldowns
+                if (_cooldowns.value.none { it.value.isInCooldown }) {
+                    break
+                }
+            }
+        }
+    }
+
+    /**
+     * Stop the cooldown ticker
+     */
+    private fun stopCooldownTicker() {
+        cooldownTickerJob?.cancel()
+        cooldownTickerJob = null
+    }
+
+    /**
+     * Update cooldowns locally without fetching from repository
+     */
+    private fun updateCooldownsLocally() {
+        val currentCooldowns = _cooldowns.value
+        val totalTimes = _totalCooldownTimes.value
+        val updatedCooldowns = mutableMapOf<String, CooldownInfo>()
+
+        for ((packageName, cooldownInfo) in currentCooldowns) {
+            if (!cooldownInfo.isInCooldown) {
+                updatedCooldowns[packageName] = cooldownInfo
+                continue
+            }
+
+            // Reduce remaining time by 1 second
+            val newRemainingTime = (cooldownInfo.timeRemaining - 1000).coerceAtLeast(0L)
+            val totalTime = totalTimes[packageName] ?: 0L
+
+            if (newRemainingTime <= 0) {
+                // Cooldown expired
+                updatedCooldowns[packageName] = CooldownInfo()
+            } else {
+                // Update progress
+                val elapsedTime = totalTime - newRemainingTime
+                val progress = if (totalTime > 0) {
+                    (elapsedTime.toFloat() / totalTime.toFloat()).coerceIn(0f, 1f)
+                } else {
+                    0f
+                }
+
+                updatedCooldowns[packageName] = CooldownInfo(
+                    isInCooldown = true,
+                    timeRemaining = newRemainingTime,
+                    progress = progress
+                )
+            }
+        }
+
+        _cooldowns.value = updatedCooldowns
+    }
+
+    /**
+     * Launch an app and record usage
+     */
     fun launchApp(packageName: String) {
         viewModelScope.launch {
-            val cooldownInfo = cooldowns.value[packageName]
-            if (cooldownInfo?.isInCooldown == true) {
-                return@launch
+            try {
+                // Check if app is in cooldown
+                val cooldownInfo = _cooldowns.value[packageName]
+                if (cooldownInfo?.isInCooldown == true) {
+                    return@launch
+                }
+
+                // Record app usage
+                appRepository.recordAppUsage(packageName)
+
+                // Refresh cooldowns to get updated state
+                refreshCooldowns()
+            } catch (e: Exception) {
+                // Handle errors if needed
             }
-            appRepository.recordAppUsage(packageName)
-            refreshUsageStats()
         }
     }
 
+    /**
+     * Handle search query changes
+     */
     fun onSearchQueryChanged(query: String) {
         _searchQuery.value = query
     }
 
+    /**
+     * Handle category selection changes
+     */
     fun onCategorySelected(category: AppCategory) {
         _activeCategory.value = category
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        stopCooldownTicker()
     }
 }
