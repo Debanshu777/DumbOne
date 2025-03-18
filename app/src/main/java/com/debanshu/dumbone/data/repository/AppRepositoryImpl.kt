@@ -4,7 +4,6 @@ import android.app.AppOpsManager
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
-import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
@@ -12,6 +11,7 @@ import android.os.Build
 import android.os.Process
 import android.provider.Settings
 import androidx.compose.ui.graphics.Color
+import androidx.core.graphics.createBitmap
 import androidx.palette.graphics.Palette
 import com.debanshu.dumbone.data.local.AppUsageStatsDao
 import com.debanshu.dumbone.data.local.getAllAppUsageStats
@@ -100,10 +100,10 @@ class AppRepositoryImpl @Inject constructor(
 
         // Convert drawable to bitmap
         val bitmap = try {
-            (drawable as? BitmapDrawable)?.bitmap ?: Bitmap.createBitmap(
-                drawable.intrinsicWidth.coerceAtLeast(1),
-                drawable.intrinsicHeight.coerceAtLeast(1),
-                Bitmap.Config.ARGB_8888
+            (drawable as? BitmapDrawable)?.bitmap ?: createBitmap(
+                drawable.intrinsicWidth.coerceAtLeast(
+                    1
+                ), drawable.intrinsicHeight.coerceAtLeast(1)
             ).also { bitmap ->
                 val canvas = Canvas(bitmap)
                 drawable.setBounds(0, 0, canvas.width, canvas.height)

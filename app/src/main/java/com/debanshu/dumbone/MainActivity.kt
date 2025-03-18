@@ -4,12 +4,11 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.collectAsState
@@ -53,8 +52,12 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier
                                 .fillMaxSize()
                                 .padding(innerPadding),
+                            pageSpacing = 0.dp,
                             userScrollEnabled = true,
-                            pageSpacing = 0.dp
+                            flingBehavior = PagerDefaults.flingBehavior(
+                                state = pagerState,
+                            ),
+                            contentPadding = PaddingValues(horizontal = 0.dp)
                         ) { page ->
                             when (page) {
                                 0 -> StatsScreen()

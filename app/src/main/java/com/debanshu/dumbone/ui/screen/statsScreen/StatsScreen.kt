@@ -1,10 +1,6 @@
 package com.debanshu.dumbone.ui.screen.statsScreen
 
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,10 +19,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -35,8 +28,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
@@ -48,7 +39,6 @@ import com.debanshu.dumbone.ui.common.formatDuration
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 import kotlin.math.min
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -64,6 +54,9 @@ fun StatsScreen(
         "EEEE, MMMM d",
         Locale.getDefault()
     ).format(Date(System.currentTimeMillis()))
+    // Sort by most used
+    val sortedStats = usageStats.sortedByDescending { it.usageCount }
+    val maxUsageCount = sortedStats.maxOfOrNull { it.usageCount } ?: 1
 
     if (needsPermission) {
         Column(
@@ -106,25 +99,6 @@ fun StatsScreen(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Date header
-                item {
-                    AnimatedVisibility(
-                        visible = true,
-                        enter = fadeIn(),
-                        exit = fadeOut()
-                    ) {
-                        Text(
-                            text = today,
-                            fontSize = 16.sp,
-                            color = Color.White.copy(alpha = 0.7f),
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 16.dp)
-                        )
-                    }
-                }
-
                 // Calculate total usage time
                 item {
                     val totalUsageTime = usageStats.sumOf { it.totalUsageDuration }
@@ -175,7 +149,7 @@ fun StatsScreen(
                             ) {
                                 // Background track
                                 CircularProgressIndicator(
-                                    progress = 1f,
+                                    progress = { 1f },
                                     modifier = Modifier.fillMaxSize(),
                                     color = Color.White.copy(alpha = 0.1f),
                                     strokeWidth = 8.dp
@@ -183,7 +157,7 @@ fun StatsScreen(
 
                                 // Actual progress
                                 CircularProgressIndicator(
-                                    progress = percentageOfTarget,
+                                    progress = { percentageOfTarget },
                                     modifier = Modifier.fillMaxSize(),
                                     color = progressColor,
                                     strokeWidth = 8.dp,
@@ -275,65 +249,50 @@ fun StatsScreen(
                         }
                     }
                 } else {
-                    // App usage section
-                    item {
+                    item(key = "app_usage") {
                         Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = "App Usage",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color.White,
+                        SectionHeader(
+                            title = "App Usage",
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                         )
-                        HorizontalDivider(color = colors.onSurface.copy(alpha = 0.1f))
                     }
-
-                    // Sort by most used
-                    val sortedStats = usageStats.sortedByDescending { it.usageCount }
-                    val maxUsageCount = sortedStats.maxOfOrNull { it.usageCount } ?: 1
 
                     items(sortedStats) { stat ->
                         val appName = allApps[stat.packageName]?.appName ?: "Unknown App"
                         val usagePercentage = stat.usageCount.toFloat() / maxUsageCount.toFloat()
 
                         Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 4.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = colors.surface.copy(alpha = 0.1f)
-                            ),
-                            shape = RoundedCornerShape(12.dp)
+                            modifier = Modifier.padding(
+                                horizontal = 16.dp,
+                                vertical = 4.dp
+                            )
                         ) {
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(16.dp)
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Row(
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier = Modifier
+                                        .fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
                                         text = appName,
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = Color.White
+                                        style = MaterialTheme.typography.titleMedium
                                     )
 
                                     Text(
                                         text = "${stat.usageCount} opens",
-                                        fontSize = 14.sp,
+                                        style = MaterialTheme.typography.bodySmall,
                                         color = Color.White.copy(alpha = 0.7f)
                                     )
                                 }
 
-                                Spacer(modifier = Modifier.height(8.dp))
-
-                                // Usage progress bar
                                 LinearProgressIndicator(
-                                    progress = usagePercentage,
+                                    progress = { usagePercentage },
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(8.dp)
@@ -342,18 +301,14 @@ fun StatsScreen(
                                     trackColor = Color.White.copy(alpha = 0.1f)
                                 )
 
-                                Spacer(modifier = Modifier.height(8.dp))
-
                                 Text(
                                     text = "Total time: ${stat.totalUsageDuration.formatDuration()}",
-                                    fontSize = 14.sp,
-                                    color = Color.White.copy(alpha = 0.7f),
-                                    modifier = Modifier.align(Alignment.End)
+                                    style = MaterialTheme.typography.bodyMedium
                                 )
                             }
                         }
-                    }
 
+                    }
                     // Bottom padding
                     item {
                         Spacer(modifier = Modifier.height(32.dp))
@@ -362,4 +317,16 @@ fun StatsScreen(
             }
         }
     }
+}
+
+@Composable
+private fun SectionHeader(
+    title: String,
+    modifier: Modifier = Modifier
+) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleLarge,
+        modifier = modifier
+    )
 }
