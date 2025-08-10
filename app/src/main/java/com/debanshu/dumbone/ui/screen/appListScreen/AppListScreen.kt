@@ -87,7 +87,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
-fun AppListScreen(
+internal fun AppListScreen(
     viewModel: AppListViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current

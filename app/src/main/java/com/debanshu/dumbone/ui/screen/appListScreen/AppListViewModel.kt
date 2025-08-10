@@ -40,7 +40,7 @@ class AppListViewModel @Inject constructor(
 
     // --- UI State ---
     private val _uiState = MutableStateFlow(AppListUiState())
-    val uiState: StateFlow<AppListUiState> = _uiState.asStateFlow()
+    internal val uiState: StateFlow<AppListUiState> = _uiState.asStateFlow()
 
     // --- Cooldown ticker job ---
     private var cooldownTickerJob: Job? = null
@@ -287,7 +287,7 @@ class AppListViewModel @Inject constructor(
     /**
      * Handle category selection changes
      */
-    fun onCategorySelected(category: AppCategory) {
+    internal fun onCategorySelected(category: AppCategory) {
         _activeCategory.value = category
     }
 

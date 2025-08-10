@@ -2,7 +2,7 @@ package com.debanshu.dumbone.ui.screen.appListScreen.model
 
 import com.debanshu.dumbone.data.model.AppInfo
 
-data class AppListUiState(
+internal data class AppListUiState(
     val isLoading: Boolean = true,
     val searchQuery: String = "",
     val activeCategory: AppCategory = AppCategory.ALL,
