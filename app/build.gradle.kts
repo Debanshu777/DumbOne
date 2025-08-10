@@ -9,12 +9,12 @@ plugins {
 
 android {
     namespace = "com.debanshu.dumbone"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.debanshu.dumbone"
         minSdk = 24
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0"
 
@@ -72,7 +72,7 @@ dependencies {
     implementation(libs.room.runtime.android)
 
     implementation(libs.androidx.datastore.preferences)
-    implementation("androidx.palette:palette:1.0.0")
+    implementation(libs.androidx.palette)
 
     debugImplementation(libs.androidx.ui.tooling)
 }
